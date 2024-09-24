@@ -3,15 +3,15 @@ import requests
 from typing import List, Tuple
 
 # Configuration
-ETF_SYMBOLS: List[str] = [
-    'VGWE.DEX',  # Vanguard FTSE All-World High Dividend Yield UCITS ETF USD Accumulation
-    'QDVE.FRK',  # iShares S&P 500 USD Information Technology Sector UCITS ETF (Acc) EUR
-    'QDV5.FRK',  # iShares MSCI India UCITS ETF USD Acc
-    'VWCE.FRK',  # Vanguard FTSE All-World UCITS ETF USD Accumulation
-]
+ETF_SYMBOLS = {
+    'VGWE.DEX': 'Vanguard FTSE All-World High Dividend Yield UCITS ETF USD Accumulation',
+    'QDVE.FRK': 'iShares S&P 500 USD Information Technology Sector UCITS ETF (Acc) EUR',
+    'QDV5.FRK': 'iShares MSCI India UCITS ETF USD Acc',
+    'VWCE.FRK': 'Vanguard FTSE All-World UCITS ETF USD Accumulation',
+}
 API_KEY: str = '498818a80dmshd82950b4e858a50p1ce907jsn7ece8c59d5a5'
 DAYS_THRESHOLD: int = 3
-DAYS_TO_DISPLAY: int = 5  # Number of days to display in the email
+DAYS_TO_DISPLAY: int = 10  # Number of days to display in the email
 EMAIL_TO: str = 'bogdan.niculescu@zetta-scale.com'  # Replace with the recipient's email address
 
 sns_client = boto3.client('sns', region_name='eu-west-2')
@@ -24,24 +24,25 @@ def lambda_handler(event, context) -> None:
     etfs_with_price_down: List[str] = []
     all_etf_price_info: str = ""
 
-    for etf in ETF_SYMBOLS:
+    for etf, etf_name in ETF_SYMBOLS.items():
         is_descending, last_prices = check_etf_price_down(etf)
         if is_descending:
-            etfs_with_price_down.append(etf)
-            send_email_alert(etf, last_prices)
+            etfs_with_price_down.append(etf_name)
+            send_email_alert(etf_name, last_prices)
 
         # Sort prices by date (earliest first) and calculate changes
         sorted_prices = sorted(last_prices, key=lambda x: x[0])
         price_info_with_changes = calculate_price_changes(sorted_prices)
 
         # Add price information to the main email
-        all_etf_price_info += f"\n\nETF: {etf}\n"
+        all_etf_price_info += f"\n\nETF: {etf_name} ({etf})\n"
         all_etf_price_info += "\n".join([f"Date: {date}, Close: {price}, Change: {change} ({percent_change}%)"
                                          for date, price, change, percent_change in price_info_with_changes])
 
     subject: str = f"Daily ETF price check - {len(etfs_with_price_down)} ETFs with decreasing prices over the last {DAYS_THRESHOLD} days"
-    body_text: str = (f"Found {len(etfs_with_price_down)} ETFs with decreasing prices over the last {DAYS_THRESHOLD} days: {etfs_with_price_down}.\n"
-                      f"Here are the closing prices for the last {DAYS_TO_DISPLAY} days for all ETFs (sorted by earliest date first):\n{all_etf_price_info}\n\n"
+    body_text: str = (f"Found {len(etfs_with_price_down)} ETFs with decreasing prices over the last {DAYS_THRESHOLD} days:\n" +
+                      "\n".join(etfs_with_price_down) +
+                      f"\n\nHere are the closing prices for the last {DAYS_TO_DISPLAY} days for all ETFs (sorted by earliest date first):\n{all_etf_price_info}\n\n"
                       "Please check the market data for further details.")
 
     send_email(subject, body_text)
@@ -110,15 +111,15 @@ def calculate_price_changes(prices: List[Tuple[str, float]]) -> List[Tuple[str, 
     return price_info_with_changes
 
 
-def send_email_alert(etf: str, last_prices: List[Tuple[str, float]]) -> None:
-    subject: str = f"Alert: {etf} has been decreasing for {DAYS_THRESHOLD} days"
+def send_email_alert(etf_name: str, last_prices: List[Tuple[str, float]]) -> None:
+    subject: str = f"Alert: {etf_name} has been decreasing for {DAYS_THRESHOLD} days"
 
     # Sort prices by date (earliest first) and calculate changes
     sorted_prices = sorted(last_prices, key=lambda x: x[0])
     price_info_with_changes = calculate_price_changes(sorted_prices)
 
     # Construct a detailed body text with the last 5 days' prices
-    body_text: str = (f"The ETF {etf} has been going down for {DAYS_THRESHOLD} consecutive days.\n"
+    body_text: str = (f"The ETF {etf_name} has been going down for {DAYS_THRESHOLD} consecutive days.\n"
                       f"Here are the last {DAYS_TO_DISPLAY} days of closing prices (sorted by earliest date first):\n\n")
 
     body_text += "\n".join([f"Date: {date}, Close: {price}, Change: {change} ({percent_change}%)"
