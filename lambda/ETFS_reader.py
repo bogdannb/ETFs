@@ -1,6 +1,6 @@
 import boto3
 import requests
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 # Configuration
 ETF_SYMBOLS: List[str] = [
@@ -30,14 +30,18 @@ def lambda_handler(event, context) -> None:
             etfs_with_price_down.append(etf)
             send_email_alert(etf, last_prices)
 
-        # Add sorted price information (lowest day first) to the main email
-        sorted_prices = sorted(last_prices, key=lambda x: x[1])
+        # Sort prices by date (earliest first) and calculate changes
+        sorted_prices = sorted(last_prices, key=lambda x: x[0])
+        price_info_with_changes = calculate_price_changes(sorted_prices)
+
+        # Add price information to the main email
         all_etf_price_info += f"\n\nETF: {etf}\n"
-        all_etf_price_info += "\n".join([f"Date: {date}, Close: {price}" for date, price in sorted_prices])
+        all_etf_price_info += "\n".join([f"Date: {date}, Close: {price}, Change: {change} ({percent_change}%)"
+                                         for date, price, change, percent_change in price_info_with_changes])
 
     subject: str = f"Daily ETF price check - {len(etfs_with_price_down)} ETFs with decreasing prices over the last {DAYS_THRESHOLD} days"
     body_text: str = (f"Found {len(etfs_with_price_down)} ETFs with decreasing prices over the last {DAYS_THRESHOLD} days: {etfs_with_price_down}.\n"
-                      f"Here are the closing prices for the last {DAYS_TO_DISPLAY} days for all ETFs (sorted by the lowest day first):\n{all_etf_price_info}\n\n"
+                      f"Here are the closing prices for the last {DAYS_TO_DISPLAY} days for all ETFs (sorted by earliest date first):\n{all_etf_price_info}\n\n"
                       "Please check the market data for further details.")
 
     send_email(subject, body_text)
@@ -85,15 +89,40 @@ def check_etf_price_down(etf: str) -> Tuple[bool, List[Tuple[str, float]]]:
     return is_descending, closing_prices
 
 
+def calculate_price_changes(prices: List[Tuple[str, float]]) -> List[Tuple[str, float, float, float]]:
+    """
+    Calculates the daily change in price and percentage change relative to the previous day.
+    """
+    price_info_with_changes = []
+
+    for i in range(len(prices)):
+        date, price = prices[i]
+        if i == 0:
+            change = 0.0
+            percent_change = 0.0
+        else:
+            previous_price = prices[i - 1][1]
+            change = price - previous_price
+            percent_change = (change / previous_price) * 100
+
+        price_info_with_changes.append((date, price, round(change, 2), round(percent_change, 2)))
+
+    return price_info_with_changes
+
+
 def send_email_alert(etf: str, last_prices: List[Tuple[str, float]]) -> None:
     subject: str = f"Alert: {etf} has been decreasing for {DAYS_THRESHOLD} days"
 
-    # Construct a detailed body text with the last 5 days' prices sorted by lowest day first
-    sorted_prices = sorted(last_prices, key=lambda x: x[1])
-    body_text: str = (f"The ETF {etf} has been going down for {DAYS_THRESHOLD} consecutive days.\n"
-                      f"Here are the last {DAYS_TO_DISPLAY} days of closing prices (sorted by lowest day first):\n\n")
+    # Sort prices by date (earliest first) and calculate changes
+    sorted_prices = sorted(last_prices, key=lambda x: x[0])
+    price_info_with_changes = calculate_price_changes(sorted_prices)
 
-    body_text += "\n".join([f"Date: {date}, Close: {price}" for date, price in sorted_prices])
+    # Construct a detailed body text with the last 5 days' prices
+    body_text: str = (f"The ETF {etf} has been going down for {DAYS_THRESHOLD} consecutive days.\n"
+                      f"Here are the last {DAYS_TO_DISPLAY} days of closing prices (sorted by earliest date first):\n\n")
+
+    body_text += "\n".join([f"Date: {date}, Close: {price}, Change: {change} ({percent_change}%)"
+                            for date, price, change, percent_change in price_info_with_changes])
     body_text += "\n\nPlease check the market data for further details."
 
     send_email(subject, body_text)
