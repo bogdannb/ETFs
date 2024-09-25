@@ -25,16 +25,13 @@ def lambda_handler(event, context) -> None:
     all_etf_price_info: str = ""
 
     for etf, etf_name in ETF_SYMBOLS.items():
-        is_descending, last_prices = check_etf_price_down(etf)
+        closing_prices = get_closing_sorted_prices(etf)
+        price_info_with_changes = calculate_price_changes(closing_prices)
+
+        is_descending = check_descending_prices(etf, closing_prices, DAYS_THRESHOLD)
         if is_descending:
             etfs_with_price_down.append(etf_name)
-            send_email_alert(etf_name, last_prices)
 
-        # Sort prices by date (earliest first) and calculate changes
-        sorted_prices = sorted(last_prices, key=lambda x: x[0])
-        price_info_with_changes = calculate_price_changes(sorted_prices)
-
-        # Add price information to the main email
         all_etf_price_info += f"\n\nETF: {etf_name} ({etf})\n"
         all_etf_price_info += "\n".join([f"Date: {date}, Close: {price}, Change: {change} ({percent_change}%)"
                                          for date, price, change, percent_change in price_info_with_changes])
@@ -48,7 +45,7 @@ def lambda_handler(event, context) -> None:
     send_email(subject, body_text)
 
 
-def check_etf_price_down(etf: str) -> Tuple[bool, List[Tuple[str, float]]]:
+def get_closing_sorted_prices(etf: str) -> List[Tuple[str, float]]:
     # Alpha Vantage URL and parameters
     url: str = "https://www.alphavantage.co/query"
     params = {
@@ -63,7 +60,7 @@ def check_etf_price_down(etf: str) -> Tuple[bool, List[Tuple[str, float]]]:
 
     if response.status_code != 200:
         print(f"Failed to retrieve data for {etf}")
-        return False, []
+        return []
 
     data = response.json()
 
@@ -71,23 +68,37 @@ def check_etf_price_down(etf: str) -> Tuple[bool, List[Tuple[str, float]]]:
     time_series = data.get('Time Series (Daily)', {})
     if not time_series:
         print(f"No data retrieved for {etf}")
-        return False, []
+        return []
 
-    # Get the last 5 days of closing prices
     closing_prices: List[Tuple[str, float]] = [
         (key, float(value['4. close'])) for key, value in sorted(time_series.items(), reverse=True)[:DAYS_TO_DISPLAY]
     ]
 
     if len(closing_prices) < DAYS_THRESHOLD:
         print(f"Not enough data points retrieved for {etf}")
-        return False, []
+        return []
 
-    # Check if the prices for the last 3 days are in descending order
-    is_descending: bool = all(closing_prices[i][1] > closing_prices[i + 1][1] for i in range(DAYS_THRESHOLD - 1))
+    sorted_prices = sorted(closing_prices, key=lambda x: x[0])
+    print(f"{etf} prices for the last {DAYS_TO_DISPLAY} days: {sorted_prices}")
 
-    print(f"{etf} prices for the last {DAYS_TO_DISPLAY} days: {closing_prices}, is_descending: {is_descending}")
+    return sorted_prices
 
-    return is_descending, closing_prices
+
+def check_descending_prices(etf: str, closing_prices: List[Tuple[str, float]], days_threshold: int) -> bool:
+    if len(closing_prices) < days_threshold:
+        print(f"Not enough data points for the last {days_threshold} days")
+        return False
+
+    # Sort prices by date in ascending order
+    closing_prices_sorted = sorted(closing_prices, key=lambda x: x[0])
+
+    # Check if the last `days_threshold` prices are in descending order
+    last_x_prices = closing_prices_sorted[-days_threshold:]
+    is_descending = all(last_x_prices[i][1] > last_x_prices[i + 1][1] for i in range(len(last_x_prices) - 1))
+
+    print(f"ETF: {etf}, Last {days_threshold} days' sorted prices: {last_x_prices}, is_descending: {is_descending}")
+    return is_descending
+
 
 
 def calculate_price_changes(prices: List[Tuple[str, float]]) -> List[Tuple[str, float, float, float]]:
@@ -111,24 +122,6 @@ def calculate_price_changes(prices: List[Tuple[str, float]]) -> List[Tuple[str, 
     return price_info_with_changes
 
 
-def send_email_alert(etf_name: str, last_prices: List[Tuple[str, float]]) -> None:
-    subject: str = f"Alert: {etf_name} has been decreasing for {DAYS_THRESHOLD} days"
-
-    # Sort prices by date (earliest first) and calculate changes
-    sorted_prices = sorted(last_prices, key=lambda x: x[0])
-    price_info_with_changes = calculate_price_changes(sorted_prices)
-
-    # Construct a detailed body text with the last 5 days' prices
-    body_text: str = (f"The ETF {etf_name} has been going down for {DAYS_THRESHOLD} consecutive days.\n"
-                      f"Here are the last {DAYS_TO_DISPLAY} days of closing prices (sorted by earliest date first):\n\n")
-
-    body_text += "\n".join([f"Date: {date}, Close: {price}, Change: {change} ({percent_change}%)"
-                            for date, price, change, percent_change in price_info_with_changes])
-    body_text += "\n\nPlease check the market data for further details."
-
-    send_email(subject, body_text)
-
-
 def send_email(subject: str, body_text: str) -> None:
     print(f"Sending email with subject: {subject}")
     response = sns_client.publish(
@@ -139,4 +132,4 @@ def send_email(subject: str, body_text: str) -> None:
     print(f"Message sent to SNS topic {SNS_TOPIC_ARN}! Message ID: {response['MessageId']}")
 
 
-lambda_handler(None, None)
+# lambda_handler(None, None)
