@@ -33,7 +33,7 @@ def lambda_handler(event, context) -> None:
             etfs_with_price_down.append(etf_name)
 
         all_etf_price_info += f"\n\nETF: {etf_name} ({etf})\n"
-        all_etf_price_info += "\n".join([f"Date: {date}, Close: {price}, Change: {change} ({percent_change}%)"
+        all_etf_price_info += "\n".join([f"Date: {date}, Close: {price:.3f}, Change: {change:.2f} ({percent_change:.3f}%)"
                                          for date, price, change, percent_change in price_info_with_changes])
 
     subject: str = f"Daily ETF price check - {len(etfs_with_price_down)} ETFs with decreasing prices over the last {DAYS_THRESHOLD} days"
@@ -117,7 +117,7 @@ def calculate_price_changes(prices: List[Tuple[str, float]]) -> List[Tuple[str, 
             change = price - previous_price
             percent_change = (change / previous_price) * 100
 
-        price_info_with_changes.append((date, price, round(change, 2), round(percent_change, 2)))
+        price_info_with_changes.append((date, price, round(change, 3), round(percent_change, 2)))
 
     return price_info_with_changes
 

@@ -34,22 +34,22 @@ def test_check_descending_prices():
     assert check_descending_prices(etf, insufficient_prices, 3) == False
 
 def test_calculate_price_changes():
-    # Test case with a set of sample prices
+    # Test case with a set of sample prices with 3 random decimal places
     prices: List[Tuple[str, float]] = [
-        ("2024-09-21", 100.0),
-        ("2024-09-22", 105.0),
-        ("2024-09-23", 103.0),
-        ("2024-09-24", 107.0),
-        ("2024-09-25", 110.0),
+        ("2024-09-21", 100.123),
+        ("2024-09-22", 105.456),
+        ("2024-09-23", 103.789),
+        ("2024-09-24", 107.234),
+        ("2024-09-25", 110.567),
     ]
 
-    # Expected output
+    # Expected output with 3 decimal places for prices and 2 for percentage changes
     expected_output = [
-        ("2024-09-21", 100.0, 0.0, 0.0),     # First day, no change
-        ("2024-09-22", 105.0, 5.0, 5.0),     # Increase by 5.0, which is 5.0%
-        ("2024-09-23", 103.0, -2.0, -1.9),   # Decrease by 2.0, which is approximately -1.9%
-        ("2024-09-24", 107.0, 4.0, 3.88),    # Increase by 4.0, which is approximately 3.88%
-        ("2024-09-25", 110.0, 3.0, 2.8),     # Increase by 3.0, which is approximately 2.8%
+        ("2024-09-21", 100.123, 0.000, 0.00),        # First day, no change
+        ("2024-09-22", 105.456, 5.333, 5.33),        # Increase by 5.333, which is approximately 5.32%
+        ("2024-09-23", 103.789, -1.667, -1.58),      # Decrease by 1.667, which is approximately -1.58%
+        ("2024-09-24", 107.234, 3.445, 3.32),        # Increase by 3.445, which is approximately 3.21%
+        ("2024-09-25", 110.567, 3.333, 3.11),        # Increase by 3.333, which is approximately 3.10%
     ]
 
     # Call the function
@@ -57,6 +57,7 @@ def test_calculate_price_changes():
 
     # Check if the result matches the expected output
     assert result == expected_output
+
 
 # Run the test if executed as a script
 if __name__ == "__main__":
