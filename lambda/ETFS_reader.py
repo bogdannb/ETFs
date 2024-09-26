@@ -8,6 +8,8 @@ ETF_SYMBOLS = {
     'QDVE.FRK': 'iShares S&P 500 USD Information Technology Sector UCITS ETF (Acc) EUR',
     'QDV5.FRK': 'iShares MSCI India UCITS ETF USD Acc',
     'VWCE.FRK': 'Vanguard FTSE All-World UCITS ETF USD Accumulation',
+    'EUNL.DEX': 'iShares Core MSCI World UCITS ETF USD (Acc)',
+    'SXR8.DEX': 'iShares Core S&P 500 UCITS ETF USD (Acc)'
 }
 API_KEY: str = '498818a80dmshd82950b4e858a50p1ce907jsn7ece8c59d5a5'
 DAYS_THRESHOLD: int = 3
@@ -33,7 +35,7 @@ def lambda_handler(event, context) -> None:
             etfs_with_price_down.append(etf_name)
 
         all_etf_price_info += f"\n\nETF: {etf_name} ({etf})\n"
-        all_etf_price_info += "\n".join([f"Date: {date}, Close: {price:.3f}, Change: {change:.2f} ({percent_change:.3f}%)"
+        all_etf_price_info += "\n".join([f"Date: {date}, Close: {price:.3f}, Change: {change:.3f} ({percent_change:.2f}%)"
                                          for date, price, change, percent_change in price_info_with_changes])
 
     subject: str = f"Daily ETF price check - {len(etfs_with_price_down)} ETFs with decreasing prices over the last {DAYS_THRESHOLD} days"
